@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner — {{ event.name }}</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d0f1a;
+      color: #e2e4ef;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: #13162280;
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #2a2d3a;
+      padding: .7rem 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .topbar .event-name { font-weight: 700; font-size: 1rem; }
+    .stat-chip {
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: .78rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stat-chip .n { font-weight: 700; font-size: 1rem; }
+
+    /* ── Main layout ── */
+    .main {
+      flex: 1;
+      display: flex;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ── Left: camera panel ── */
+    .cam-panel {
+      flex: 0 0 auto;
+      width: min(50vw, 480px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+      background: #0d0f1a;
+      gap: 1rem;
+    }
+
+    .cam-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 380px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 1;
+    }
+    #scanner-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    #scanner-canvas { display: none; }
+
+    /* Overlay */
+    .cam-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scan-frame {
+      width: 60%;
+      height: 60%;
+      position: relative;
+    }
+    /* Dark vignette outside frame */
+    .scan-frame::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      box-shadow: inset 0 0 0 9999px rgba(0,0,0,.45);
+      pointer-events: none;
+    }
+    /* Corner brackets */
+    .corner {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-style: solid;
+      border-color: #4ade80;
+    }
+    .corner.tl { top:0; left:0;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .corner.tr { top:0; right:0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .corner.bl { bottom:0; left:0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .corner.br { bottom:0; right:0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
+    /* Scan line */
+    .scan-line {
+      position: absolute;
+      left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, #4ade80, transparent);
+      filter: drop-shadow(0 0 4px #4ade80);
+      animation: scanAnim 2s ease-in-out infinite;
+    }
+    @keyframes scanAnim {
+      0%   { top: 2%; opacity: 0; }
+      8%   { opacity: 1; }
+      92%  { opacity: 1; }
+      100% { top: 98%; opacity: 0; }
+    }
+    .scan-line.paused { animation-play-state: paused; }
+
+    /* Camera status */
+    .cam-status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0d0f1acc;
+      font-size: .85rem;
+      color: #aaa;
+      text-align: center;
+      gap: .5rem;
+      padding: 1rem;
+    }
+    .cam-status svg { opacity: .4; }
+
+    /* Flash on scan */
+    .flash-ok      { animation: flashGreen .4s ease; }
+    .flash-warn    { animation: flashYellow .4s ease; }
+    .flash-danger  { animation: flashRed .4s ease; }
+    @keyframes flashGreen  { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 6px #4ade8066} }
+    @keyframes flashYellow { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 6px #facc1566} }
+    @keyframes flashRed    { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 6px #f8717166} }
+
+    /* Manual input */
+    .manual-row {
+      display: flex;
+      gap: .5rem;
+      width: 100%;
+      max-width: 380px;
+    }
+    .manual-row input {
+      flex: 1;
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      border-radius: 10px;
+      color: #e2e4ef;
+      padding: .55rem .9rem;
+      font-family: 'Courier New', monospace;
+      font-size: .95rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .manual-row input:focus { border-color: #4f6ef7; }
+    .manual-row input::placeholder { text-transform: none; letter-spacing: 0; color: #555; }
+    .btn-validate {
+      background: #4f6ef7;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      padding: .55rem 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-validate:hover { background: #3a56e0; }
+
+    .hint-text { font-size: .72rem; color: #555; text-align: center; }
+
+    /* ── Right: info panel ── */
+    .info-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 1rem;
+      gap: .9rem;
+      border-left: 1px solid #1e2133;
+      background: #0f1117;
+    }
+
+    /* Result card */
+    .result-card {
+      border-radius: 14px;
+      padding: 1.1rem 1.3rem;
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      transition: background .3s, border-color .3s;
+      flex-shrink: 0;
+    }
+    .result-card.ok     { background: #0f2a1a; border-color: #4ade80; }
+    .result-card.warn   { background: #2a200a; border-color: #facc15; }
+    .result-card.danger { background: #2a0f0f; border-color: #f87171; }
+
+    .result-icon { font-size: 2rem; line-height: 1; }
+    .result-msg  { font-weight: 700; font-size: 1rem; margin-top: .3rem; }
+    .ticket-detail-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: .8rem;
+      padding: .2rem 0;
+      border-bottom: 1px solid #ffffff0d;
+    }
+    .ticket-detail-row:last-child { border-bottom: none; }
+    .ticket-detail-row .lbl { color: #888; }
+    .seat-tag {
+      display: inline-block;
+      background: #4f6ef7;
+      color: #fff;
+      border-radius: 5px;
+      padding: 1px 7px;
+      font-size: .75rem;
+      font-weight: 600;
+      margin: 1px;
+    }
+
+    /* Recent entries log */
+    .log-header {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #555;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .log-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+    .log-item {
+      background: #1e2133;
+      border-radius: 8px;
+      padding: .45rem .75rem;
+      font-size: .78rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+      border-left: 3px solid #4ade80;
+    }
+    .log-item .log-num  { font-family: monospace; font-size: .7rem; color: #aaa; }
+    .log-item .log-name { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .log-item .log-time { color: #666; white-space: nowrap; font-size: .72rem; }
+    .log-item .log-type { color: #aaa; font-size: .72rem; }
+    .log-empty { color: #444; font-size: .8rem; text-align: center; padding: 1rem; }
+
+    /* Back link */
+    .back-link {
+      color: #4f6ef7;
+      text-decoration: none;
+      font-size: .8rem;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .back-link:hover { color: #7a96ff; }
+
+    /* ── Mobile: stack ── */
+    @media (max-width: 680px) {
+      html, body { overflow: auto; }
+      .main { flex-direction: column; overflow: visible; }
+      .cam-panel { width: 100%; }
+      .info-panel { min-height: 60vh; border-left: none; border-top: 1px solid #1e2133; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <a href="{% url 'scanner:index' %}" class="back-link">
+    ← Eventos
+  </a>
+  <span class="event-name" style="flex:1;">{{ event.name }}</span>
+
+  <div class="stat-chip">
+    <span style="color:#60a5fa;">●</span>
+    <span class="n" id="stat-sold">{{ sold }}</span>
+    <span style="color:#888;">Vendidos</span>
+  </div>
+  <div class="stat-chip">
+    <span style="color:#4ade80;">●</span>
+    <span class="n" id="stat-entries">{{ entries }}</span>
+    <span style="color:#888;">Entradas</span>
+  </div>
+  <div class="stat-chip">
+    <span style="color:#facc15;">●</span>
+    <span class="n" id="stat-pending">{{ pending }}</span>
+    <span style="color:#888;">Pendientes</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ── CAMERA PANEL ── -->
+  <div class="cam-panel">
+
+    <div class="cam-wrap" id="cam-wrap">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <canvas id="scanner-canvas"></canvas>
+
+      <div class="cam-overlay">
+        <div class="scan-frame" id="scan-frame">
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+          <div class="scan-line" id="scan-line"></div>
+        </div>
+      </div>
+
+      <!-- Shown before camera starts -->
+      <div class="cam-status" id="cam-status">
+        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path d="M15 10l4.553-2.069A1 1 0 0121 8.883v6.234a1 1 0 01-1.447.894L15 14M4 8h11a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
+        </svg>
+        <span id="cam-status-msg">Iniciando cámara...</span>
+      </div>
+    </div>
+
+    <!-- Manual input -->
+    <div class="manual-row">
+      <input type="text" id="manual-input" placeholder="Ingresa el ID del boleto manualmente" maxlength="20">
+      <button class="btn-validate" id="manual-btn" onclick="triggerManual()">Validar</button>
+    </div>
+    <p class="hint-text">Apunta la cámara al código QR del boleto&ensp;•&ensp;o escribe el ID y presiona Validar</p>
+
+  </div>
+
+  <!-- ── INFO PANEL ── -->
+  <div class="info-panel">
+
+    <!-- Result card -->
+    <div class="result-card" id="result-card">
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <span class="result-icon" id="result-icon">🎟️</span>
+        <span class="result-msg" id="result-msg">Listo para escanear</span>
+      </div>
+      <div id="result-detail" style="margin-top:.7rem;"></div>
+    </div>
+
+    <!-- Recent entries -->
+    <div class="log-header">Últimas entradas</div>
+    <div class="log-list" id="log-list">
+      {% for entry in recent %}
+      <div class="log-item">
+        <div>
+          <div class="log-num">{{ entry.ticket.ticket_number }}</div>
+          <div class="log-name">{{ entry.ticket.sale.buyer_name }}</div>
+          <div class="log-type">{{ entry.ticket.ticket_type.name }}
+            {% if entry.ticket.seat_numbers %}
+              &ensp;
+              {% for s in entry.ticket.seat_numbers %}<span class="seat-tag">{{ s }}</span>{% endfor %}
+            {% endif %}
+          </div>
+        </div>
+        <div class="log-time">{{ entry.entered_at|date:"H:i" }}</div>
+      </div>
+      {% empty %}
+      <div class="log-empty">Aún no hay entradas registradas para este evento.</div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+<!-- jsQR library -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────
+const EVENT_ID      = {{ event.pk }};
+const VALIDATE_URL  = '{% url "scanner:validate" %}';
+const CSRF_TOKEN    = '{{ csrf_token }}';
+
+// ── State ─────────────────────────────────────────────────────────
+let cooldown = false;
+let lastNum  = '';
+let statEntries = {{ entries }};
+let statPending = {{ pending }};
+
+// ── DOM refs ──────────────────────────────────────────────────────
+const video       = document.getElementById('scanner-video');
+const canvas      = document.getElementById('scanner-canvas');
+const ctx         = canvas.getContext('2d', { willReadFrequently: true });
+const camStatus   = document.getElementById('cam-status');
+const camStatusMsg= document.getElementById('cam-status-msg');
+const scanLine    = document.getElementById('scan-line');
+const camWrap     = document.getElementById('cam-wrap');
+const resultCard  = document.getElementById('result-card');
+const resultIcon  = document.getElementById('result-icon');
+const resultMsg   = document.getElementById('result-msg');
+const resultDetail= document.getElementById('result-detail');
+const logList     = document.getElementById('log-list');
+const manualInput = document.getElementById('manual-input');
+const statEntriesEl = document.getElementById('stat-entries');
+const statPendingEl = document.getElementById('stat-pending');
+
+// ── Camera init ───────────────────────────────────────────────────
+function startCamera() {
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+  })
+  .then(stream => {
+    video.srcObject = stream;
+    video.addEventListener('loadeddata', () => {
+      camStatus.style.display = 'none';
+      requestAnimationFrame(processFrame);
+    });
+  })
+  .catch(err => {
+    camStatusMsg.textContent = 'Sin acceso a la cámara. Usa el campo manual.';
+    console.warn('Camera error:', err);
+  });
+}
+
+// ── QR processing loop ────────────────────────────────────────────
+function processFrame() {
+  if (!cooldown && video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (code) {
+      onQRDetected(code.data);
+    }
+  }
+  requestAnimationFrame(processFrame);
+}
+
+function onQRDetected(raw) {
+  let num = raw.trim().toUpperCase();
+  // Try to parse JSON QR (from our ticket print)
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.num) num = String(parsed.num).toUpperCase();
+  } catch (_) {}
+
+  if (num === lastNum && cooldown) return;
+  lastNum = num;
+  validate(num);
+}
+
+// ── Manual trigger ────────────────────────────────────────────────
+function triggerManual() {
+  const num = manualInput.value.trim().toUpperCase();
+  if (!num) { manualInput.focus(); return; }
+  validate(num);
+}
+
+manualInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') triggerManual();
+});
+
+// ── Validate ──────────────────────────────────────────────────────
+function validate(ticketNumber) {
+  if (cooldown) return;
+  cooldown = true;
+  scanLine.classList.add('paused');
+
+  fetch(VALIDATE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: JSON.stringify({ ticket_number: ticketNumber, event_id: EVENT_ID }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    showResult(data);
+    manualInput.value = '';
+    setTimeout(() => {
+      cooldown = false;
+      scanLine.classList.remove('paused');
+      lastNum  = '';
+    }, 4000);
+  })
+  .catch(err => {
+    showError('Error de red. Verifica tu conexión.');
+    setTimeout(() => { cooldown = false; scanLine.classList.remove('paused'); }, 2000);
+  });
+}
+
+// ── Show result ───────────────────────────────────────────────────
+const COLORS = {
+  success: { cls: 'ok',     icon: '✅', flash: 'flash-ok'   },
+  warning: { cls: 'warn',   icon: '⚠️', flash: 'flash-warn' },
+  danger:  { cls: 'danger', icon: '❌', flash: 'flash-danger'},
+};
+
+function showResult(data) {
+  const color  = data.color || 'danger';
+  const theme  = COLORS[color] || COLORS.danger;
+  const ticket = data.ticket || {};
+
+  // Update card style
+  resultCard.className = 'result-card ' + theme.cls;
+  resultIcon.textContent = theme.icon;
+  resultMsg.textContent  = data.message || '';
+
+  // Flash camera border
+  camWrap.classList.remove('flash-ok', 'flash-warn', 'flash-danger');
+  void camWrap.offsetWidth; // reflow
+  camWrap.classList.add(theme.flash);
+
+  // Detail section
+  let html = '';
+  if (ticket.number) {
+    html += row('Boleto', `<code style="font-size:.85rem;">${ticket.number}</code>`);
+    html += row('Nombre', ticket.buyer || '');
+    html += row('Tipo', ticket.type || '');
+    if (ticket.seats && ticket.seats.length) {
+      const tags = ticket.seats.map(s => `<span class="seat-tag">${s}</span>`).join('');
+      html += row('Asiento(s)', tags);
+    }
+    if (ticket.entries_used !== undefined) {
+      html += row('Entradas usadas', `${ticket.entries_used} / ${ticket.quantity}`);
+    }
+  }
+  resultDetail.innerHTML = html ? `<div style="margin-top:.6rem;">${html}</div>` : '';
+
+  // Update stats & log on valid entry
+  if (data.status === 'ok' && ticket.number) {
+    statEntries++;
+    statPending = Math.max(0, statPending - 1);
+    statEntriesEl.textContent = statEntries;
+    statPendingEl.textContent = statPending;
+    prependLog(ticket);
+  }
+}
+
+function row(label, val) {
+  return `<div class="ticket-detail-row"><span class="lbl">${label}</span><span>${val}</span></div>`;
+}
+
+function showError(msg) {
+  resultCard.className = 'result-card danger';
+  resultIcon.textContent = '❌';
+  resultMsg.textContent  = msg;
+  resultDetail.innerHTML = '';
+}
+
+function prependLog(ticket) {
+  // Remove empty state if present
+  const empty = logList.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  const time = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const seats = (ticket.seats || []).map(s => `<span class="seat-tag">${s}</span>`).join('');
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  item.innerHTML = `
+    <div>
+      <div class="log-num">${ticket.number}</div>
+      <div class="log-name">${ticket.buyer || ''}</div>
+      <div class="log-type">${ticket.type || ''}${seats ? '&ensp;' + seats : ''}</div>
+    </div>
+    <div class="log-time">${time}</div>
+  `;
+  logList.insertBefore(item, logList.firstChild);
+
+  // Keep only 30 items
+  while (logList.children.length > 30) logList.removeChild(logList.lastChild);
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+startCamera();
+</script>
+</body>
+</html>

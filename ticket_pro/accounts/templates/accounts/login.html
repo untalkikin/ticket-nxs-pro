@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión — TicketPro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #0d0f1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #e2e4ef;
+      padding: 1rem;
+    }
+
+    /* Subtle dot-grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, #2a2d3a 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: .35;
+      pointer-events: none;
+    }
+
+    .card {
+      position: relative;
+      background: #13162280;
+      backdrop-filter: blur(14px);
+      border: 1px solid #2a2d3a;
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    }
+
+    /* Logo / brand */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+    .brand-icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, #4f6ef7, #3a56e0);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand-name {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      background: linear-gradient(90deg, #e2e4ef, #a0aacc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    h2 {
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 400;
+      color: #888;
+      margin-bottom: 1.8rem;
+    }
+
+    /* Form */
+    .field { margin-bottom: 1.1rem; }
+
+    label {
+      display: block;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #888;
+      margin-bottom: .45rem;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      border-radius: 10px;
+      color: #e2e4ef;
+      padding: .75rem 1rem;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus {
+      border-color: #4f6ef7;
+      box-shadow: 0 0 0 3px #4f6ef722;
+    }
+    input::placeholder { color: #444; }
+
+    /* Error list */
+    .errors {
+      background: #2a0f0f;
+      border: 1px solid #f8717166;
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      margin-bottom: 1.2rem;
+      font-size: .85rem;
+      color: #f87171;
+      list-style: none;
+    }
+    .errors li::before { content: '⚠ '; }
+
+    /* Submit button */
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #4f6ef7, #3a56e0);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: .8rem;
+      cursor: pointer;
+      letter-spacing: .02em;
+      transition: opacity .15s, transform .1s;
+      margin-top: .4rem;
+    }
+    .btn-login:hover  { opacity: .9; }
+    .btn-login:active { transform: scale(.98); }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: .75rem;
+      color: #444;
+    }
+    .footer-note a {
+      color: #4f6ef7;
+      text-decoration: none;
+    }
+    .footer-note a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <div class="brand">
+    <div class="brand-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="white" viewBox="0 0 16 16">
+        <path d="M0 4.5A1.5 1.5 0 0 1 1.5 3h13A1.5 1.5 0 0 1 16 4.5V6a.5.5 0 0 1-.5.5 1.5 1.5 0 0 0 0 3 .5.5 0 0 1 .5.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5V10a.5.5 0 0 1 .5-.5 1.5 1.5 0 1 0 0-3A.5.5 0 0 1 0 6V4.5z"/>
+      </svg>
+    </div>
+    <span class="brand-name">TicketPro</span>
+  </div>
+
+  <h2>Acceso al sistema</h2>
+
+  {% if form.non_field_errors %}
+    <ul class="errors">
+      {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+    <div class="field">
+      <label for="id_username">Usuario</label>
+      <input type="text"
+             id="id_username"
+             name="username"
+             value="{{ form.username.value|default:'' }}"
+             placeholder="Nombre de usuario"
+             autocomplete="username"
+             autofocus>
+      {% for error in form.username.errors %}
+        <span style="color:#f87171;font-size:.78rem;">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="field">
+      <label for="id_password">Contraseña</label>
+      <input type="password"
+             id="id_password"
+             name="password"
+             placeholder="••••••••"
+             autocomplete="current-password">
+      {% for error in form.password.errors %}
+        <span style="color:#f87171;font-size:.78rem;">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <button type="submit" class="btn-login">Iniciar sesión</button>
+  </form>
+
+  <p class="footer-note">
+    ¿Eres administrador?
+    <a href="/admin/">Ir al panel de administración</a>
+  </p>
+
+</div>
+</body>
+</html>

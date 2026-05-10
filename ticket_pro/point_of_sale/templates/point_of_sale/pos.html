@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Punto de Venta — Boletos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+
+    /* Secciones de boletos por evento */
+    .event-section { display: none; }
+    .event-section.active { display: block; }
+
+    /* Mapa de asientos */
+    .seat-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    .seat-btn {
+      width: 44px;
+      height: 36px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 0;
+      border-radius: 6px;
+      transition: all .15s ease;
+    }
+    .seat-btn.selected {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 2px #0d6efd;
+    }
+    .stage-label {
+      text-align: center;
+      color: #6c757d;
+      font-size: 12px;
+      border-top: 3px solid #dee2e6;
+      padding-top: 6px;
+      margin-bottom: 8px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+<div class="container py-4" style="max-width:780px;">
+
+  <div class="d-flex align-items-center mb-4 gap-3">
+    <div class="bg-primary text-white rounded p-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M0 4.5A1.5 1.5 0 0 1 1.5 3h13A1.5 1.5 0 0 1 16 4.5V6a.5.5 0 0 1-.5.5 1.5 1.5 0 0 0 0 3 .5.5 0 0 1 .5.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5V10a.5.5 0 0 1 .5-.5 1.5 1.5 0 1 0 0-3A.5.5 0 0 1 0 6V4.5z"/>
+      </svg>
+    </div>
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Punto de Venta</h1>
+      <small class="text-muted">Venta de boletos para eventos</small>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if not events_data %}
+    <div class="alert alert-warning">No hay eventos activos disponibles.</div>
+  {% else %}
+  <form method="post" id="pos-form">
+    {% csrf_token %}
+
+    <!-- ① Selección de evento -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">① Seleccionar evento</div>
+      <div class="card-body">
+        <select name="event" id="event-select" class="form-select" required>
+          <option value="">— Selecciona un evento —</option>
+          {% for ed in events_data %}
+            <option value="{{ ed.event.pk }}"
+                    data-capacity="{{ ed.event.total_capacity }}"
+                    data-sold="{{ ed.event.tickets_sold }}"
+                    data-pct="{{ ed.event.sold_percentage }}">
+              {{ ed.event.name }} &mdash; {{ ed.event.date|date:"d/m/Y H:i" }} | {{ ed.event.venue }}
+            </option>
+          {% endfor %}
+        </select>
+
+        <div id="event-info" class="mt-3" style="display:none;">
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>Vendidos: <strong id="info-sold">0</strong> / <strong id="info-cap">0</strong></span>
+            <span id="info-pct-text" class="fw-bold">0%</span>
+          </div>
+          <div class="progress" style="height:8px;border-radius:4px;">
+            <div id="info-bar" class="progress-bar" role="progressbar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② Boletos por evento -->
+    {% for ed in events_data %}
+    <div class="event-section" id="section-{{ ed.event.pk }}">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold">② Seleccionar boletos</div>
+        <div class="card-body p-0">
+
+          {% if ed.ticket_types %}
+            {% for tt_entry in ed.ticket_types %}
+            <div class="p-3 {% if not forloop.last %}border-bottom{% endif %}">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                  <span class="fw-bold">{{ tt_entry.obj.name }}</span>
+                  {% if tt_entry.obj.has_numbered_seats %}
+                    <span class="badge bg-info text-dark ms-2">Asiento numerado</span>
+                  {% endif %}
+                </div>
+                <span class="fw-bold text-primary">${{ tt_entry.obj.price|floatformat:2 }}</span>
+              </div>
+
+              {% if tt_entry.obj.has_numbered_seats %}
+                <!-- ── Mapa de asientos ── -->
+                <div class="stage-label">Escenario / Pantalla</div>
+                <div class="seat-grid" id="grid-{{ tt_entry.obj.pk }}">
+                  {% for seat in tt_entry.obj.get_all_seat_labels %}
+                    {% if seat in tt_entry.taken_seats %}
+                      <button type="button" class="btn btn-danger seat-btn" disabled title="Ocupado">
+                        {{ seat }}
+                      </button>
+                    {% else %}
+                      <button type="button"
+                              class="btn btn-outline-success seat-btn"
+                              data-tt="{{ tt_entry.obj.pk }}"
+                              data-seat="{{ seat }}"
+                              data-price="{{ tt_entry.obj.price }}"
+                              onclick="toggleSeat(this)">
+                        {{ seat }}
+                      </button>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                <div class="d-flex gap-3 mt-2 small text-muted">
+                  <span><span class="badge bg-success">&nbsp;</span> Disponible</span>
+                  <span><span class="badge bg-danger">&nbsp;</span> Ocupado</span>
+                  <span><span class="badge bg-primary">&nbsp;</span> Seleccionado</span>
+                </div>
+                <div id="selected-display-{{ tt_entry.obj.pk }}" class="mt-2 text-primary fw-semibold small"></div>
+                <!-- Hidden inputs para asientos seleccionados — se generan por JS -->
+                <div id="seat-inputs-{{ tt_entry.obj.pk }}"></div>
+
+              {% else %}
+                <!-- ── Cantidad libre ── -->
+                <div class="d-flex align-items-center gap-3">
+                  <div style="width:120px;">
+                    <input type="number"
+                           name="qty_{{ tt_entry.obj.pk }}"
+                           class="form-control text-center qty-input"
+                           value="0" min="0" max="{{ tt_entry.obj.available_quantity }}"
+                           data-price="{{ tt_entry.obj.price }}"
+                           {% if not tt_entry.obj.is_available %}disabled{% endif %}>
+                  </div>
+                  <span class="text-muted small">
+                    {% if tt_entry.obj.is_available %}
+                      {{ tt_entry.obj.available_quantity }} disponible(s)
+                    {% else %}
+                      <span class="text-danger fw-semibold">Agotado</span>
+                    {% endif %}
+                  </span>
+                </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+
+          {% else %}
+            <p class="text-muted p-3 mb-0">Este evento no tiene tipos de boleto configurados.</p>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- ③ Datos del comprador -->
+    <div class="card shadow-sm mb-4" id="buyer-section" style="display:none;">
+      <div class="card-header fw-semibold">③ Datos del comprador</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Nombre completo <span class="text-danger">*</span></label>
+          <input type="text" name="buyer_name" class="form-control" placeholder="Nombre del comprador" required>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Correo electrónico</label>
+            <input type="email" name="buyer_email" class="form-control" placeholder="correo@ejemplo.com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono</label>
+            <input type="tel" name="buyer_phone" class="form-control" placeholder="+52 000 000 0000">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumen y botón -->
+    <div id="summary-section" style="display:none;">
+      <div class="card shadow-sm mb-3 border-primary">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Total a cobrar:</span>
+          <span class="fs-4 fw-bold text-primary" id="total-display">$0.00</span>
+        </div>
+      </div>
+      <div class="d-grid">
+        <button type="submit" class="btn btn-primary btn-lg">
+          Registrar venta e imprimir boleto
+        </button>
+      </div>
+    </div>
+
+  </form>
+  {% endif %}
+</div>
+
+<script>
+// ── Estado de asientos seleccionados ──────────────────────────────
+const selectedSeats = {};   // { "tt_pk": ["A-1", "A-2", ...] }
+const seatPrices    = {};   // { "tt_pk": price_float }
+
+// Pre-cargar precios de asientos numerados
+{% for ed in events_data %}
+  {% for tt_entry in ed.ticket_types %}
+    {% if tt_entry.obj.has_numbered_seats %}
+      seatPrices['{{ tt_entry.obj.pk }}'] = {{ tt_entry.obj.price }};
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+function toggleSeat(btn) {
+  const tt   = btn.dataset.tt;
+  const seat = btn.dataset.seat;
+
+  if (!selectedSeats[tt]) selectedSeats[tt] = [];
+
+  if (btn.classList.contains('selected')) {
+    // Deseleccionar
+    btn.classList.remove('selected', 'btn-primary');
+    btn.classList.add('btn-outline-success');
+    selectedSeats[tt] = selectedSeats[tt].filter(s => s !== seat);
+  } else {
+    // Seleccionar
+    btn.classList.add('selected', 'btn-primary');
+    btn.classList.remove('btn-outline-success');
+    selectedSeats[tt].push(seat);
+  }
+
+  // Actualizar display de asientos seleccionados
+  const display = document.getElementById(`selected-display-${tt}`);
+  if (selectedSeats[tt].length > 0) {
+    display.textContent = 'Seleccionados: ' + selectedSeats[tt].join(', ');
+  } else {
+    display.textContent = '';
+  }
+
+  // Regenerar hidden inputs
+  const container = document.getElementById(`seat-inputs-${tt}`);
+  container.innerHTML = '';
+  selectedSeats[tt].forEach(s => {
+    const inp = document.createElement('input');
+    inp.type  = 'hidden';
+    inp.name  = `seats_${tt}`;
+    inp.value = s;
+    container.appendChild(inp);
+  });
+
+  updateTotal();
+}
+
+// ── Total y visibilidad de secciones ─────────────────────────────
+function updateTotal() {
+  let total = 0;
+
+  // Asientos numerados
+  Object.keys(selectedSeats).forEach(tt => {
+    const qty = selectedSeats[tt].length;
+    if (qty > 0 && seatPrices[tt]) {
+      total += qty * seatPrices[tt];
+    }
+  });
+
+  // Cantidades libres
+  document.querySelectorAll('.qty-input').forEach(inp => {
+    const qty = parseInt(inp.value) || 0;
+    const price = parseFloat(inp.dataset.price) || 0;
+    if (qty > 0) total += qty * price;
+  });
+
+  document.getElementById('total-display').textContent =
+    '$' + total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  const hasItems = total > 0;
+  document.getElementById('buyer-section').style.display   = hasItems ? 'block' : 'none';
+  document.getElementById('summary-section').style.display = hasItems ? 'block' : 'none';
+}
+
+// ── Cambio de evento ─────────────────────────────────────────────
+document.getElementById('event-select').addEventListener('change', function () {
+  const id = this.value;
+
+  // Ocultar y limpiar todas las secciones
+  document.querySelectorAll('.event-section').forEach(el => {
+    el.classList.remove('active');
+    el.querySelectorAll('.qty-input').forEach(i => { i.value = 0; });
+    el.querySelectorAll('.seat-btn.selected').forEach(b => {
+      b.classList.remove('selected', 'btn-primary');
+      b.classList.add('btn-outline-success');
+    });
+    el.querySelectorAll('[id^="seat-inputs-"]').forEach(c => { c.innerHTML = ''; });
+    el.querySelectorAll('[id^="selected-display-"]').forEach(d => { d.textContent = ''; });
+  });
+  Object.keys(selectedSeats).forEach(k => { selectedSeats[k] = []; });
+
+  document.getElementById('buyer-section').style.display   = 'none';
+  document.getElementById('summary-section').style.display = 'none';
+  document.getElementById('total-display').textContent = '$0.00';
+
+  const info = document.getElementById('event-info');
+  if (!id) { info.style.display = 'none'; return; }
+
+  // Mostrar info de capacidad
+  const opt  = this.options[this.selectedIndex];
+  const cap  = parseInt(opt.dataset.capacity) || 0;
+  const sold = parseInt(opt.dataset.sold) || 0;
+  const pct  = parseFloat(opt.dataset.pct) || 0;
+
+  document.getElementById('info-sold').textContent = sold;
+  document.getElementById('info-cap').textContent  = cap;
+  document.getElementById('info-pct-text').textContent = pct + '%';
+  const bar = document.getElementById('info-bar');
+  bar.style.width = pct + '%';
+  bar.className = 'progress-bar ' + (pct < 75 ? 'bg-success' : pct < 90 ? 'bg-warning' : 'bg-danger');
+  info.style.display = 'block';
+
+  // Mostrar sección del evento seleccionado
+  const sec = document.getElementById('section-' + id);
+  if (sec) sec.classList.add('active');
+});
+
+// ── Inputs de cantidad libre ──────────────────────────────────────
+document.addEventListener('input', e => {
+  if (e.target.classList.contains('qty-input')) updateTotal();
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

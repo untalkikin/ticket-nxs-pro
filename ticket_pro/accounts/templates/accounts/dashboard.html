@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — TicketPro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #0d0f1a;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #e2e4ef;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, #2a2d3a 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: .25;
+      pointer-events: none;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      position: relative;
+      background: #13162280;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #2a2d3a;
+      padding: .85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .brand { display: flex; align-items: center; gap: .6rem; }
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #4f6ef7, #3a56e0);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand-name { font-weight: 800; font-size: 1.1rem; letter-spacing: -.01em; }
+
+    .spacer { flex: 1; }
+
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      border-radius: 50px;
+      padding: .35rem .9rem .35rem .45rem;
+      font-size: .82rem;
+    }
+    .user-avatar {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #4f6ef7, #a78bfa);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: .75rem;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .user-name { font-weight: 600; }
+    .user-role { color: #888; font-size: .72rem; }
+
+    .btn-logout {
+      background: #1e2133;
+      border: 1px solid #2e3245;
+      border-radius: 8px;
+      color: #e2e4ef;
+      padding: .4rem .9rem;
+      font-size: .8rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-logout:hover { background: #2a0f0f; border-color: #f87171; color: #f87171; }
+
+    /* ── Page content ── */
+    .page { position: relative; max-width: 900px; margin: 0 auto; padding: 2rem 1.2rem; }
+
+    .greeting { margin-bottom: 2rem; }
+    .greeting h1 { font-size: 1.6rem; font-weight: 800; }
+    .greeting p  { color: #888; margin-top: .3rem; font-size: .9rem; }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      flex: 1;
+      min-width: 130px;
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+    }
+    .stat-card .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: #666; font-weight: 600; }
+    .stat-card .val { font-size: 2rem; font-weight: 800; margin-top: .2rem; }
+
+    /* ── Main actions ── */
+    .actions-title {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #555;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .action-card {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 16px;
+      padding: 1.8rem 1.5rem;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+      display: flex;
+      flex-direction: column;
+      gap: .8rem;
+    }
+    .action-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.3);
+    }
+    .action-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-bg);
+    }
+    .action-card h3 { font-size: 1.1rem; font-weight: 700; }
+    .action-card p  { font-size: .82rem; color: #888; line-height: 1.5; }
+    .action-arrow   { color: var(--accent); font-size: 1.2rem; margin-top: auto; }
+
+    /* Accent variants */
+    .accent-blue  { --accent: #4f6ef7; --accent-bg: #1a1f3a; }
+    .accent-green { --accent: #4ade80; --accent-bg: #0f2a1a; }
+    .accent-purple { --accent: #a78bfa; --accent-bg: #1a1330; }
+
+    /* ── Events summary ── */
+    .events-title {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #555;
+      font-weight: 600;
+      margin-bottom: .8rem;
+    }
+    .event-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: .8rem 1rem;
+      margin-bottom: .5rem;
+      flex-wrap: wrap;
+    }
+    .event-row .ev-name { font-weight: 600; font-size: .9rem; flex: 1; min-width: 150px; }
+    .event-row .ev-date { color: #888; font-size: .78rem; }
+    .ev-bar-wrap { width: 120px; }
+    .ev-bar-track { background: #2a2d3a; border-radius: 4px; height: 6px; }
+    .ev-bar-fill  { border-radius: 4px; height: 6px; }
+    .ev-pct { font-size: .78rem; color: #888; width: 38px; text-align: right; }
+
+    /* Admin link */
+    .admin-link {
+      margin-top: 1rem;
+      font-size: .8rem;
+      color: #555;
+      text-align: center;
+    }
+    .admin-link a { color: #4f6ef7; text-decoration: none; }
+    .admin-link a:hover { text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      .stats-row { gap: .6rem; }
+      .stat-card .val { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
+        <path d="M0 4.5A1.5 1.5 0 0 1 1.5 3h13A1.5 1.5 0 0 1 16 4.5V6a.5.5 0 0 1-.5.5 1.5 1.5 0 0 0 0 3 .5.5 0 0 1 .5.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5V10a.5.5 0 0 1 .5-.5 1.5 1.5 0 1 0 0-3A.5.5 0 0 1 0 6V4.5z"/>
+      </svg>
+    </div>
+    <span class="brand-name">TicketPro</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="user-chip">
+    <div class="user-avatar">{{ user.username|slice:":2" }}</div>
+    <div>
+      <div class="user-name">{{ user.get_full_name|default:user.username }}</div>
+      <div class="user-role">{% if user.is_staff %}Administrador{% else %}Operador{% endif %}</div>
+    </div>
+  </div>
+
+  <a href="{% url 'accounts:logout' %}" class="btn-logout">Cerrar sesión</a>
+</div>
+
+<div class="page">
+
+  <div class="greeting">
+    <h1>Hola, {{ user.get_full_name|default:user.username }} 👋</h1>
+    <p>Selecciona una acción para comenzar.</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="lbl">Ventas hoy</div>
+      <div class="val" style="color:#4f6ef7;">{{ sales_today }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">Entradas hoy</div>
+      <div class="val" style="color:#4ade80;">{{ entries_today }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">Eventos activos</div>
+      <div class="val" style="color:#a78bfa;">{{ total_events }}</div>
+    </div>
+  </div>
+
+  <!-- Main actions -->
+  <div class="actions-title">Acciones</div>
+  <div class="action-grid">
+
+    <a href="/pos/" class="action-card accent-blue">
+      <div class="action-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="#4f6ef7" viewBox="0 0 16 16">
+          <path d="M0 4.5A1.5 1.5 0 0 1 1.5 3h13A1.5 1.5 0 0 1 16 4.5V6a.5.5 0 0 1-.5.5 1.5 1.5 0 0 0 0 3 .5.5 0 0 1 .5.5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5V10a.5.5 0 0 1 .5-.5 1.5 1.5 0 1 0 0-3A.5.5 0 0 1 0 6V4.5z"/>
+        </svg>
+      </div>
+      <h3>Punto de Venta</h3>
+      <p>Vende boletos para los eventos activos, selecciona asientos y genera el boleto imprimible con QR.</p>
+      <div class="action-arrow">Ir al POS →</div>
+    </a>
+
+    <a href="/scanner/" class="action-card accent-green">
+      <div class="action-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="#4ade80" viewBox="0 0 16 16">
+          <path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 1-1 0v-3A1.5 1.5 0 0 1 1.5 0h3a.5.5 0 0 1 0 1h-3zM11 .5a.5.5 0 0 1 .5-.5h3A1.5 1.5 0 0 1 16 1.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5zM.5 11a.5.5 0 0 1 .5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 1 0 1h-3A1.5 1.5 0 0 1 0 14.5v-3a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 1 .5-.5zM3 4.5a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7zm2-1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-1 0v-9A.5.5 0 0 1 5 3.5zm2 1a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7zm4-1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-1 0v-9A.5.5 0 0 1 11 3.5zm2 1a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7z"/>
+        </svg>
+      </div>
+      <h3>Control de Entradas</h3>
+      <p>Escanea los códigos QR de los boletos con la cámara web o ingresa el ID manualmente para registrar el acceso.</p>
+      <div class="action-arrow">Ir al Scanner →</div>
+    </a>
+
+    {% if user.is_staff %}
+    <a href="/admin/" class="action-card accent-purple">
+      <div class="action-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="#a78bfa" viewBox="0 0 16 16">
+          <path d="M11 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm.256 7a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.74.025a4.548 4.548 0 0 1 .515-.877A12.4 12.4 0 0 0 8 9c-5 0-6 3-6 4s1 1 1 1h5.256zm3.5 6c-1.48 0-2.75-1.679-2.75-3.5C9 13.12 10.268 12 11.75 12s2.75 1.121 2.75 2.5c0 1.821-1.27 3.5-2.75 3.5zm-.25-6v2.25h-1v1h1V18h1v-1.75h1v-1h-1V13h-1z"/>
+        </svg>
+      </div>
+      <h3>Administración</h3>
+      <p>Gestiona eventos, tipos de boleto, usuarios, ventas y registros completos del sistema.</p>
+      <div class="action-arrow">Ir al Admin →</div>
+    </a>
+    {% endif %}
+
+  </div>
+
+  <!-- Events summary -->
+  {% if events_summary %}
+  <div class="events-title">Eventos activos — resumen de ventas</div>
+  {% for ed in events_summary %}
+  <div class="event-row">
+    <div>
+      <div class="ev-name">{{ ed.event.name }}</div>
+      <div class="ev-date">{{ ed.event.date|date:"d/m/Y H:i" }} · {{ ed.event.venue }}</div>
+    </div>
+    <div style="font-size:.78rem;color:#888;">
+      🎟 {{ ed.sold }} / {{ ed.event.total_capacity }}
+    </div>
+    <div class="ev-bar-wrap">
+      <div class="ev-bar-track">
+        <div class="ev-bar-fill {% if ed.pct >= 90 %}bg-danger{% elif ed.pct >= 60 %}bg-warning{% else %}bg-success{% endif %}"
+             style="width:{{ ed.pct }}%;background:{% if ed.pct >= 90 %}#f87171{% elif ed.pct >= 60 %}#facc15{% else %}#4ade80{% endif %}">
+        </div>
+      </div>
+    </div>
+    <div class="ev-pct">{{ ed.pct }}%</div>
+    <a href="/scanner/{{ ed.event.pk }}/"
+       style="font-size:.78rem;color:#4ade80;text-decoration:none;white-space:nowrap;">
+      Scanner →
+    </a>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if user.is_staff %}
+  <p class="admin-link">
+    Gestión avanzada en <a href="/admin/">el panel de administración</a>
+  </p>
+  {% endif %}
+
+</div>
+
+</body>
+</html>
